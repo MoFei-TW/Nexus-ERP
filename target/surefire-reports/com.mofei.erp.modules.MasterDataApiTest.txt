@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.mofei.erp.modules.MasterDataApiTest
+-------------------------------------------------------------------------------
+Tests run: 34, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 25.66 s -- in com.mofei.erp.modules.MasterDataApiTest

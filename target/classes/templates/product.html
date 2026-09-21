@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::content})}">
+<head>
+    <title>產品主檔 - MOFEI ERP</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">產品主檔模組</h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                    管理販售商品規格、定價、庫存數量與負責窗口
+                </p>
+            </div>
+            <button class="btn btn-primary" onclick="openCreateModal()">+ 新增產品</button>
+        </div>
+
+        <!-- 搜尋與篩選列 -->
+        <div class="search-bar">
+            <div class="search-field search-field-wide">
+                <label for="searchKeyword">即時模糊搜尋</label>
+                <input type="text" id="searchKeyword" class="input-control" placeholder="搜尋編號、名稱或規格屬性...">
+            </div>
+            <div class="search-field">
+                <label for="searchId">產品編號</label>
+                <input type="text" id="searchId" class="input-control" placeholder="例如: 202601A">
+            </div>
+            <div class="search-field">
+                <label for="searchName">產品名稱</label>
+                <input type="text" id="searchName" class="input-control" placeholder="輸入商品名稱...">
+            </div>
+            <div class="search-actions">
+                <button class="btn btn-primary" onclick="handleSearch()">查詢</button>
+                <button class="btn btn-secondary" onclick="resetSearch()">重設</button>
+            </div>
+        </div>
+
+        <!-- 資料表格 -->
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 110px;">產品編號</th>
+                        <th style="min-width: 150px;">產品名稱</th>
+                        <th style="min-width: 180px;">規格屬性</th>
+                        <th style="min-width: 110px;">定價 (NT$)</th>
+                        <th style="min-width: 80px;">庫存</th>
+                        <th style="min-width: 130px;">負責業務</th>
+                        <th style="min-width: 100px;">狀態</th>
+                        <th style="min-width: 160px;">建立時間</th>
+                        <th style="min-width: 120px; text-align: center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="productTableBody">
+                    <!-- 由 mofei-table.js 動態渲染 -->
+                </tbody>
+            </table>
+            <!-- 分頁控制列 (固定每頁 10 筆) -->
+            <div class="pagination-bar" id="productPagination"></div>
+        </div>
+
+        <!-- 新增/編輯 產品彈窗 -->
+        <div class="modal-overlay" id="productModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle" style="font-size: 1.15rem; font-weight: 700;">新增產品</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
+                </div>
+                <form id="productForm" onsubmit="handleFormSubmit(event)">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="search-field">
+                            <label for="formProductId">產品編號 (由系統自動配置)</label>
+                            <input type="text" id="formProductId" class="input-control" placeholder="由系統自動配置" disabled>
+                        </div>
+                        <div class="search-field">
+                            <label for="formProductName">產品名稱 *</label>
+                            <input type="text" id="formProductName" class="input-control" required placeholder="例如: 智慧財務模組">
+                        </div>
+                        <div class="search-field">
+                            <label for="formAttributes">規格屬性</label>
+                            <input type="text" id="formAttributes" class="input-control" placeholder="規格、材質、分類標籤等">
+                        </div>
+                        <div class="search-field">
+                            <label for="formPrice">產品價格 (NT$) * (以整數為單位)</label>
+                            <input type="number" step="1" min="0" id="formPrice" class="input-control" required placeholder="0">
+                        </div>
+                        <div class="search-field">
+                            <label for="formStock">庫存數量 *</label>
+                            <input type="number" min="0" id="formStock" class="input-control" required value="26">
+                        </div>
+                        <div class="search-field">
+                            <label for="formEmployeeId">負責員工 *</label>
+                            <select id="formEmployeeId" class="select-control" required>
+                                <option value="">載入員工清單中...</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label for="formStatus">產品狀態 *</label>
+                            <select id="formStatus" class="select-control">
+                                <option value="正常販售">正常販售</option>
+                                <option value="缺貨中">缺貨中</option>
+                                <option value="下架停售">下架停售</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="/js/mofei-table.js"></script>
+        <script>
+            let prodTable;
+            let currentEditId = null;
+            let employeeList = [];
+
+            async function loadEmployeeOptions() {
+                try {
+                    const res = await fetch('/api/employee/page?current=1&size=100');
+                    const json = await res.json();
+                    if (json.code === 200 && json.data && json.data.records) {
+                        employeeList = json.data.records;
+                        renderEmployeeSelect();
+                    }
+                } catch (e) {
+                    console.error('載入員工主檔失敗', e);
+                }
+            }
+
+            function renderEmployeeSelect(selectedId = '') {
+                const select = document.getElementById('formEmployeeId');
+                select.innerHTML = '<option value="">請選擇負責員工...</option>';
+                employeeList.forEach(emp => {
+                    const opt = document.createElement('option');
+                    opt.value = emp.employeeId;
+                    opt.textContent = `${emp.employeeName} (${emp.employeeId})${emp.status === '在職' ? '' : ' [' + emp.status + ']'}`;
+                    if (emp.employeeId === selectedId) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                loadEmployeeOptions();
+
+                prodTable = new MofeiTable({
+                    apiUrl: '/api/product/page',
+                    tableBodyId: 'productTableBody',
+                    paginationId: 'productPagination',
+                    size: 10,
+                    columns: [
+                        { field: 'productId', minWidth: '110px' },
+                        { field: 'productName', minWidth: '150px' },
+                        { field: 'attributes', minWidth: '180px' },
+                        { 
+                            field: 'price',
+                            minWidth: '110px',
+                            render: row => Number(row.price).toLocaleString()
+                        },
+                        { 
+                            field: 'stock',
+                            minWidth: '80px',
+                            render: row => {
+                                const span = document.createElement('span');
+                                span.textContent = row.stock;
+                                if (row.stock <= 20) {
+                                    span.style.fontWeight = 'bold';
+                                    span.style.textDecoration = 'underline';
+                                }
+                                return span;
+                            }
+                        },
+                        { 
+                            field: 'employeeName',
+                            minWidth: '130px',
+                            render: row => row.employeeName ? `${row.employeeName} (${row.employeeId})` : row.employeeId
+                        },
+                        { 
+                            field: 'status', 
+                            minWidth: '100px',
+                            render: row => {
+                                const span = document.createElement('span');
+                                span.className = 'badge';
+                                span.textContent = row.status;
+                                return span;
+                            } 
+                        },
+                        { 
+                            field: 'createdAt', 
+                            minWidth: '160px',
+                            render: row => row.createdAt ? row.createdAt.replace('T', ' ').substring(0, 19) : '-' 
+                        }
+                    ],
+                    actions: (row) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.gap = '0.4rem';
+
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-secondary btn-sm';
+                        editBtn.textContent = '修改';
+                        editBtn.onclick = () => openEditModal(row);
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'btn btn-secondary btn-sm';
+                        delBtn.textContent = '下架';
+                        delBtn.onclick = () => handleDelete(row.productId);
+
+                        div.appendChild(editBtn);
+                        div.appendChild(delBtn);
+                        return div;
+                    }
+                });
+
+                let debounceTimer;
+                document.getElementById('searchKeyword').addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        prodTable.setKeyword(e.target.value);
+                    }, 300);
+                });
+            });
+
+            function handleSearch() {
+                const productId = document.getElementById('searchId').value.trim();
+                const productName = document.getElementById('searchName').value.trim();
+                prodTable.setFilters({ productId, productName });
+            }
+
+            function resetSearch() {
+                document.getElementById('searchKeyword').value = '';
+                document.getElementById('searchId').value = '';
+                document.getElementById('searchName').value = '';
+                prodTable.keyword = '';
+                prodTable.setFilters({});
+            }
+
+            async function openCreateModal() {
+                currentEditId = null;
+                document.getElementById('modalTitle').textContent = '新增產品';
+                document.getElementById('productForm').reset();
+                document.getElementById('formProductId').value = '';
+                document.getElementById('formProductId').disabled = true;
+                document.getElementById('formProductId').placeholder = '由系統自動配置';
+                if (employeeList.length === 0) {
+                    await loadEmployeeOptions();
+                } else {
+                    renderEmployeeSelect('');
+                }
+                document.getElementById('productModal').classList.add('active');
+            }
+
+            async function openEditModal(row) {
+                currentEditId = row.productId;
+                document.getElementById('modalTitle').textContent = `修改產品 (${row.productId})`;
+                document.getElementById('formProductId').value = row.productId;
+                document.getElementById('formProductId').disabled = true;
+                document.getElementById('formProductId').placeholder = '';
+                document.getElementById('formProductName').value = row.productName;
+                document.getElementById('formAttributes').value = row.attributes || '';
+                document.getElementById('formPrice').value = row.price ? Math.round(row.price) : 0;
+                document.getElementById('formStock').value = row.stock;
+                if (employeeList.length === 0) {
+                    await loadEmployeeOptions();
+                }
+                renderEmployeeSelect(row.employeeId);
+                document.getElementById('formStatus').value = row.status;
+                document.getElementById('productModal').classList.add('active');
+            }
+
+            function closeModal() {
+                document.getElementById('productModal').classList.remove('active');
+            }
+
+            function highlightErrorField(elementId) {
+                const el = document.getElementById(elementId);
+                if (el) {
+                    el.focus();
+                    if (typeof el.select === 'function') {
+                        el.select();
+                    }
+                    el.style.borderColor = '#ef4444';
+                    el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
+                    setTimeout(() => {
+                        el.style.borderColor = '';
+                        el.style.boxShadow = '';
+                    }, 3000);
+                }
+            }
+
+            async function handleFormSubmit(e) {
+                e.preventDefault();
+
+                const productName = document.getElementById('formProductName').value.trim();
+                const priceRaw = document.getElementById('formPrice').value.trim();
+                const stockRaw = document.getElementById('formStock').value.trim();
+                const employeeId = document.getElementById('formEmployeeId').value.trim();
+                const attributes = document.getElementById('formAttributes').value.trim();
+                const status = document.getElementById('formStatus').value;
+
+                // 前端防呆校驗並明確指出錯誤欄位 (亦同員工模組)
+                if (!productName) {
+                    alert('輸入有誤：產品名稱不能為空');
+                    highlightErrorField('formProductName');
+                    return;
+                }
+
+                const priceNum = Number(priceRaw);
+                if (priceRaw === '' || isNaN(priceNum) || !Number.isInteger(priceNum) || priceNum < 0) {
+                    alert('輸入有誤：產品價格必須為大於或等於0的整數');
+                    highlightErrorField('formPrice');
+                    return;
+                }
+
+                const stockNum = Number(stockRaw);
+                if (stockRaw === '' || isNaN(stockNum) || !Number.isInteger(stockNum) || stockNum < 0) {
+                    alert('輸入有誤：庫存數量不能為負數且必須為整數');
+                    highlightErrorField('formStock');
+                    return;
+                }
+
+                if (!employeeId) {
+                    alert('輸入有誤：請選擇負責員工');
+                    highlightErrorField('formEmployeeId');
+                    return;
+                }
+
+                const payload = {
+                    productId: currentEditId ? document.getElementById('formProductId').value.trim() : null,
+                    productName: productName,
+                    attributes: attributes,
+                    price: priceNum,
+                    stock: stockNum,
+                    employeeId: employeeId,
+                    status: status
+                };
+
+                const url = currentEditId ? `/api/product/${currentEditId}` : '/api/product';
+                const method = currentEditId ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await res.json();
+                    if (res.ok && result.code === 200) {
+                        alert(result.message || (currentEditId ? '修改產品成功' : '新增產品成功'));
+                        closeModal();
+                        prodTable.loadData();
+                    } else {
+                        // 詳細告知使用者是哪一項欄位輸入有誤
+                        const errMsg = result.message || (res.status === 400 ? '請求參數檢驗失敗，請檢查輸入內容' : '系統內部錯誤，請聯繫管理員');
+                        alert('操作失敗: ' + errMsg);
+
+                        // 自動定位聚焦（focus）與高亮問題欄位
+                        if (errMsg.includes('名稱') || errMsg.includes('productName')) {
+                            highlightErrorField('formProductName');
+                        } else if (errMsg.includes('價格') || errMsg.includes('price')) {
+                            highlightErrorField('formPrice');
+                        } else if (errMsg.includes('庫存') || errMsg.includes('stock')) {
+                            highlightErrorField('formStock');
+                        } else if (errMsg.includes('員工') || errMsg.includes('employeeId')) {
+                            highlightErrorField('formEmployeeId');
+                        }
+                    }
+                } catch (err) {
+                    alert('請求異常: ' + err);
+                }
+            }
+
+            async function handleDelete(id) {
+                if (confirm(`確定要將產品 [${id}] 下架停售嗎？`)) {
+                    try {
+                        const res = await fetch(`/api/product/${id}`, { method: 'DELETE' });
+                        const result = await res.json();
+                        if (result.code === 200) {
+                            alert(result.message);
+                            prodTable.loadData();
+                        } else {
+                            alert('下架失敗: ' + result.message);
+                        }
+                    } catch (e) {
+                        alert('請求異常: ' + e);
+                    }
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>

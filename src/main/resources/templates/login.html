@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入系統 - MOFEI ERP</title>
+    <link rel="stylesheet" th:href="@{/css/mofei-style.css}">
+    <style>
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-body);
+            padding: 1.5rem;
+        }
+        .login-box {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-dark);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 420px;
+            padding: 2.5rem;
+            box-shadow: var(--shadow-md);
+            text-align: center;
+        }
+        .login-logo {
+            height: 60px;
+            width: auto;
+            margin-bottom: 1.25rem;
+            border-radius: var(--radius-sm);
+        }
+        .login-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        .login-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            white-space: nowrap;
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-box">
+            <img th:src="@{/logo/2026-09-10-00-logo by MF.jpg}" alt="MOFEI Logo" class="login-logo">
+            <h1 class="login-title">MOFEI ERP 系統</h1>
+            <p class="login-subtitle">請輸入帳號密碼以登入企業管理系統</p>
+
+            <form class="login-form" onsubmit="handleLogin(event)">
+                <div class="search-field">
+                    <label for="username" style="white-space: nowrap;">使用者帳號 / 員工編號 / Email</label>
+                    <input type="text" id="username" class="input-control" required autofocus placeholder="admin 或 2026000">
+                </div>
+                <div class="search-field">
+                    <label for="password" style="white-space: nowrap;">密碼</label>
+                    <input type="password" id="password" class="input-control" required placeholder="請輸入密碼">
+                </div>
+                <div id="errorAlert" style="display: none; color: #dc2626; font-size: 0.85rem; padding: 0.5rem; background-color: #fee2e2; border-radius: var(--radius-sm); white-space: nowrap;"></div>
+                <button type="submit" class="btn btn-primary" id="loginSubmitBtn" style="padding: 0.75rem; font-size: 1rem;">登入系統</button>
+            </form>
+
+            <div style="margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted); border-top: 1px solid var(--border-light); padding-top: 1rem;">
+                <p style="white-space: nowrap;">預設管理員帳號：<code>admin</code> / 密碼：<code>admin</code></p>
+                <p style="margin-top: 0.25rem; white-space: nowrap;"><a href="/dashboard" style="color: var(--text-secondary); text-decoration: underline;">以訪客身份直接瀏覽</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('loginSubmitBtn');
+            const errEl = document.getElementById('errorAlert');
+            errEl.style.display = 'none';
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            btn.disabled = true;
+            btn.textContent = '驗證中...';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await res.json();
+                if (result.code === 200) {
+                    window.location.href = '/dashboard';
+                } else {
+                    errEl.textContent = result.message || '帳號或密碼錯誤';
+                    errEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = '登入系統';
+                }
+            } catch (err) {
+                errEl.textContent = '連線伺服器失敗，請稍後重試';
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = '登入系統';
+            }
+        }
+    </script>
+</body>
+</html>

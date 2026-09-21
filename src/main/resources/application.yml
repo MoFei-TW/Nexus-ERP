@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mofei-erp
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=MOFEI;encrypt=true;trustServerCertificate=true;
+    username: sa
+    password: "0000000"
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  thymeleaf:
+    cache: false
+    mode: HTML
+    encoding: UTF-8
+  web:
+    resources:
+      static-locations:
+        - classpath:/static/
+        - file:images/
+        - file:workspace/images/
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+
+logging:
+  level:
+    com.mofei.erp: DEBUG
+    org.springframework.security: INFO

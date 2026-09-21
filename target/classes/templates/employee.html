@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::content})}">
+<head>
+    <title>員工主檔 - MOFEI ERP</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">員工主檔模組</h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                    管理內部員工、系統帳號與在職狀態（採用在職狀態控制，避免歷史訂單外鍵斷鏈）
+                </p>
+            </div>
+            <button class="btn btn-primary" onclick="openCreateModal()">+ 新增員工</button>
+        </div>
+
+        <!-- 搜尋與篩選列 -->
+        <div class="search-bar">
+            <div class="search-field search-field-wide">
+                <label for="searchKeyword">即時模糊搜尋</label>
+                <input type="text" id="searchKeyword" class="input-control" placeholder="輸入編號、姓名、電話或Email...">
+            </div>
+            <div class="search-field">
+                <label for="searchId">員工編號</label>
+                <input type="text" id="searchId" class="input-control" placeholder="例如: 2026000">
+            </div>
+            <div class="search-field">
+                <label for="searchName">員工姓名</label>
+                <input type="text" id="searchName" class="input-control" placeholder="輸入姓名...">
+            </div>
+            <div class="search-actions">
+                <button class="btn btn-primary" onclick="handleSearch()">查詢</button>
+                <button class="btn btn-secondary" onclick="resetSearch()">重設</button>
+            </div>
+        </div>
+
+        <!-- 資料表格 -->
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 110px;">員工編號</th>
+                        <th style="min-width: 110px;">員工姓名</th>
+                        <th style="min-width: 130px;">聯絡電話</th>
+                        <th style="min-width: 180px;">電子郵件</th>
+                        <th style="min-width: 110px;">系統角色</th>
+                        <th style="min-width: 100px;">在職狀態</th>
+                        <th style="min-width: 160px;">建立時間</th>
+                        <th style="min-width: 140px; text-align: center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="employeeTableBody">
+                    <!-- 由 mofei-table.js 動態渲染 -->
+                </tbody>
+            </table>
+            <!-- 分頁控制列 (固定每頁 10 筆) -->
+            <div class="pagination-bar" id="employeePagination"></div>
+        </div>
+
+        <!-- 新增/編輯 員工彈窗 -->
+        <div class="modal-overlay" id="employeeModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle" style="font-size: 1.15rem; font-weight: 700;">新增員工</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
+                </div>
+                <form id="employeeForm" onsubmit="handleFormSubmit(event)">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="search-field">
+                            <label for="formEmployeeId">員工編號 (由系統自動配置)</label>
+                            <input type="text" id="formEmployeeId" class="input-control" placeholder="由系統自動配置" disabled>
+                        </div>
+                        <div class="search-field">
+                            <label for="formEmployeeName">員工姓名 *</label>
+                            <input type="text" id="formEmployeeName" class="input-control" required placeholder="只接受中文與英文">
+                        </div>
+                        <div class="search-field">
+                            <label for="formPhone">員工電話 * (格式: 0912-345-678)</label>
+                            <input type="text" id="formPhone" class="input-control" required pattern="^[0-9]{4}-[0-9]{3}-[0-9]{3}$" placeholder="0912-345-678">
+                        </div>
+                        <div class="search-field">
+                            <label for="formEmail">電子郵件 *</label>
+                            <input type="email" id="formEmail" class="input-control" required placeholder="example@mofei.com">
+                        </div>
+                        <div class="search-field">
+                            <label for="formRole">系統角色 *</label>
+                            <select id="formRole" class="select-control">
+                                <option value="EMPLOYEE">一般員工 (EMPLOYEE)</option>
+                                <option value="ADMIN">系統管理員 (ADMIN)</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label for="formStatus">在職狀態 *</label>
+                            <select id="formStatus" class="select-control">
+                                <option value="在職">在職</option>
+                                <option value="離職">離職</option>
+                                <option value="停權">停權</option>
+                            </select>
+                        </div>
+                        <div class="search-field" id="passwordGroup">
+                            <label for="formPassword">初始密碼 (留空預設為 0000000)</label>
+                            <input type="password" id="formPassword" class="input-control" placeholder="預設 0000000">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="/js/mofei-table.js"></script>
+        <script>
+            let empTable;
+            let currentEditId = null;
+
+            document.addEventListener('DOMContentLoaded', () => {
+                empTable = new MofeiTable({
+                    apiUrl: '/api/employee/page',
+                    tableBodyId: 'employeeTableBody',
+                    paginationId: 'employeePagination',
+                    size: 10,
+                    columns: [
+                        { field: 'employeeId', minWidth: '110px' },
+                        { field: 'employeeName', minWidth: '110px' },
+                        { field: 'phone', minWidth: '130px' },
+                        { field: 'email', minWidth: '180px' },
+                        { field: 'role', minWidth: '110px' },
+                        { 
+                            field: 'status', 
+                            minWidth: '100px',
+                            render: row => {
+                                const span = document.createElement('span');
+                                span.className = 'badge';
+                                span.textContent = row.status;
+                                return span;
+                            } 
+                        },
+                        { 
+                            field: 'createdAt', 
+                            minWidth: '160px',
+                            render: row => row.createdAt ? row.createdAt.replace('T', ' ').substring(0, 19) : '-' 
+                        }
+                    ],
+                    actions: (row) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.gap = '0.4rem';
+
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-secondary btn-sm';
+                        editBtn.textContent = '修改';
+                        editBtn.onclick = () => openEditModal(row);
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'btn btn-secondary btn-sm';
+                        delBtn.textContent = '在職切換';
+                        delBtn.title = '採用在職狀態控制 (軟刪除)';
+                        delBtn.onclick = () => handleSoftDelete(row.employeeId, row.status);
+
+                        div.appendChild(editBtn);
+                        div.appendChild(delBtn);
+                        return div;
+                    }
+                });
+
+                // 即時模糊搜尋防抖
+                let debounceTimer;
+                document.getElementById('searchKeyword').addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        empTable.setKeyword(e.target.value);
+                    }, 300);
+                });
+            });
+
+            function handleSearch() {
+                const employeeId = document.getElementById('searchId').value.trim();
+                const employeeName = document.getElementById('searchName').value.trim();
+                empTable.setFilters({ employeeId, employeeName });
+            }
+
+            function resetSearch() {
+                document.getElementById('searchKeyword').value = '';
+                document.getElementById('searchId').value = '';
+                document.getElementById('searchName').value = '';
+                empTable.keyword = '';
+                empTable.setFilters({});
+            }
+
+            function openCreateModal() {
+                currentEditId = null;
+                document.getElementById('modalTitle').textContent = '新增員工';
+                document.getElementById('employeeForm').reset();
+                document.getElementById('formEmployeeId').value = '';
+                document.getElementById('formEmployeeId').disabled = true;
+                document.getElementById('formEmployeeId').placeholder = '由系統自動配置';
+                document.getElementById('passwordGroup').style.display = 'flex';
+                document.getElementById('employeeModal').classList.add('active');
+            }
+
+            function openEditModal(row) {
+                currentEditId = row.employeeId;
+                document.getElementById('modalTitle').textContent = `修改員工 (${row.employeeId})`;
+                document.getElementById('formEmployeeId').value = row.employeeId;
+                document.getElementById('formEmployeeId').disabled = true;
+                document.getElementById('formEmployeeId').placeholder = '';
+                document.getElementById('formEmployeeName').value = row.employeeName;
+                document.getElementById('formPhone').value = row.phone;
+                document.getElementById('formEmail').value = row.email;
+                document.getElementById('formRole').value = row.role;
+                document.getElementById('formStatus').value = row.status;
+                document.getElementById('formPassword').value = '';
+                document.getElementById('passwordGroup').style.display = 'none';
+                document.getElementById('employeeModal').classList.add('active');
+            }
+
+            function closeModal() {
+                document.getElementById('employeeModal').classList.remove('active');
+            }
+
+            async function handleFormSubmit(e) {
+                e.preventDefault();
+                const payload = {
+                    employeeId: currentEditId ? document.getElementById('formEmployeeId').value.trim() : null,
+                    employeeName: document.getElementById('formEmployeeName').value.trim(),
+                    phone: document.getElementById('formPhone').value.trim(),
+                    email: document.getElementById('formEmail').value.trim(),
+                    role: document.getElementById('formRole').value,
+                    status: document.getElementById('formStatus').value,
+                    password: document.getElementById('formPassword').value.trim()
+                };
+
+                const url = currentEditId ? `/api/employee/${currentEditId}` : '/api/employee';
+                const method = currentEditId ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await res.json();
+                    if (result.code === 200) {
+                        alert(result.message);
+                        closeModal();
+                        empTable.loadData();
+                    } else {
+                        alert('操作失敗: ' + result.message);
+                    }
+                } catch (err) {
+                    alert('請求異常: ' + err);
+                }
+            }
+
+            async function handleSoftDelete(id, currentStatus) {
+                const targetStatus = currentStatus === '在職' ? '離職' : '在職';
+                if (confirm(`確定要將員工 [${id}] 的狀態變更為 [${targetStatus}] 嗎？`)) {
+                    try {
+                        const res = await fetch(`/api/employee/${id}/status?status=${encodeURIComponent(targetStatus)}`, {
+                            method: 'PUT'
+                        });
+                        const result = await res.json();
+                        if (result.code === 200) {
+                            alert(result.message);
+                            empTable.loadData();
+                        } else {
+                            alert('狀態變更失敗: ' + result.message);
+                        }
+                    } catch (e) {
+                        alert('請求異常: ' + e);
+                    }
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>

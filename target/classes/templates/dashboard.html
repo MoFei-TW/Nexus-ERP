@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::content})}">
+<head>
+    <title>首頁儀表板 - MOFEI ERP</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">首頁營運監控儀表板</h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                    即時監控 4 大核心主檔數據與營運指標
+                </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadDashboardStats()">重新整理數據</button>
+        </div>
+
+        <!-- 4 大主檔即時統計數據卡片 -->
+        <div class="dashboard-grid">
+            <!-- 員工主檔監控卡片 -->
+            <div class="metric-card">
+                <div class="metric-title">員工主檔監控</div>
+                <div class="metric-value" id="statEmployees">-</div>
+                <div class="metric-subtext">在職員工數：<strong id="statActiveEmployees">-</strong> 人</div>
+                <div style="margin-top: 1rem;">
+                    <a href="/employee" class="btn btn-secondary btn-sm" style="width: 100%;">進入員工管理</a>
+                </div>
+            </div>
+
+            <!-- 產品主檔監控卡片 -->
+            <div class="metric-card">
+                <div class="metric-title">產品主檔監控</div>
+                <div class="metric-value" id="statProducts">-</div>
+                <div class="metric-subtext">低庫存警戒 (≤20)：<strong id="statLowStock">-</strong> 項</div>
+                <div style="margin-top: 1rem;">
+                    <a href="/product" class="btn btn-secondary btn-sm" style="width: 100%;">進入產品管理</a>
+                </div>
+            </div>
+
+            <!-- 客戶主檔監控卡片 -->
+            <div class="metric-card">
+                <div class="metric-title">客戶主檔監控</div>
+                <div class="metric-value" id="statCustomers">-</div>
+                <div class="metric-subtext">企業與會員往來客戶總戶數</div>
+                <div style="margin-top: 1rem;">
+                    <a href="/customer" class="btn btn-secondary btn-sm" style="width: 100%;">進入客戶管理</a>
+                </div>
+            </div>
+
+            <!-- 訂單主檔監控卡片 -->
+            <div class="metric-card">
+                <div class="metric-title">訂單交易監控</div>
+                <div class="metric-value" id="statOrders">-</div>
+                <div class="metric-subtext">處理中：<strong id="statPendingOrders">-</strong> 筆 | 總額：NT$ <strong id="statRevenue">-</strong></div>
+                <div style="margin-top: 1rem;">
+                    <a href="/order" class="btn btn-secondary btn-sm" style="width: 100%;">進入訂單管理</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系統狀態與快速導覽 -->
+        <div class="table-card" style="padding: 1.5rem;">
+            <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; white-space: nowrap;">系統架構與安全狀態</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.875rem;">
+                <div style="white-space: nowrap;">
+                    <span style="color: var(--text-secondary);">資料庫連線：</span>
+                    <strong>MSSQL (MOFEI)</strong>
+                </div>
+                <div style="white-space: nowrap;">
+                    <span style="color: var(--text-secondary);">安全規範：</span>
+                    <strong>RBAC + Cookie 三大本柱</strong>
+                </div>
+                <div style="white-space: nowrap;">
+                    <span style="color: var(--text-secondary);">前端架構：</span>
+                    <strong>純原生 Vanilla JS / 離線模式</strong>
+                </div>
+                <div style="white-space: nowrap;">
+                    <span style="color: var(--text-secondary);">視覺樣式：</span>
+                    <strong>極簡黑白灰階</strong>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            async function loadDashboardStats() {
+                try {
+                    const res = await fetch('/api/dashboard/stats');
+                    const result = await res.json();
+                    if (result.code === 200 && result.data) {
+                        const d = result.data;
+                        document.getElementById('statEmployees').textContent = d.totalEmployees;
+                        document.getElementById('statActiveEmployees').textContent = d.activeEmployees;
+                        document.getElementById('statProducts').textContent = d.totalProducts;
+                        document.getElementById('statLowStock').textContent = d.lowStockProducts;
+                        document.getElementById('statCustomers').textContent = d.totalCustomers;
+                        document.getElementById('statOrders').textContent = d.totalOrders;
+                        document.getElementById('statPendingOrders').textContent = d.pendingOrders;
+                        document.getElementById('statRevenue').textContent = Number(d.totalRevenue).toLocaleString();
+                    }
+                } catch (e) {
+                    console.error('載入儀表板統計失敗:', e);
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', loadDashboardStats);
+        </script>
+    </div>
+</body>
+</html>

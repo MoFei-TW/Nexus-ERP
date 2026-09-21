@@ -1,0 +1,5 @@
+com\mofei\erp\modules\portal\PortalControllerTest.class
+com\mofei\erp\common\RTest.class
+com\mofei\erp\HashGenTest.class
+com\mofei\erp\modules\MasterDataApiTest.class
+com\mofei\erp\framework\security\SecurityTest.class

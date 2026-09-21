@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::content})}">
+<head>
+    <title>客戶主檔 - MOFEI ERP</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">客戶主檔模組</h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                    管理企業往來客戶、統一編號、聯絡資訊與專屬業務窗口
+                </p>
+            </div>
+            <button class="btn btn-primary" onclick="openCreateModal()">+ 新增客戶</button>
+        </div>
+
+        <!-- 搜尋與篩選列 -->
+        <div class="search-bar">
+            <div class="search-field search-field-wide">
+                <label for="searchKeyword">即時模糊搜尋</label>
+                <input type="text" id="searchKeyword" class="input-control" placeholder="搜尋客戶編號、姓名、統編、電話或地址...">
+            </div>
+            <div class="search-field">
+                <label for="searchId">客戶編號</label>
+                <input type="text" id="searchId" class="input-control" placeholder="例如: 202609001">
+            </div>
+            <div class="search-field">
+                <label for="searchName">客戶姓名/抬頭</label>
+                <input type="text" id="searchName" class="input-control" placeholder="輸入客戶姓名或抬頭...">
+            </div>
+            <div class="search-actions">
+                <button class="btn btn-primary" onclick="handleSearch()">查詢</button>
+                <button class="btn btn-secondary" onclick="resetSearch()">重設</button>
+            </div>
+        </div>
+
+        <!-- 資料表格 -->
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 100px;">客戶編號</th>
+                        <th style="min-width: 100px;">客戶姓名</th>
+                        <th style="min-width: 130px;">聯絡電話</th>
+                        <th style="min-width: 160px;">電子郵件</th>
+                        <th style="min-width: 140px;">公司抬頭</th>
+                        <th style="min-width: 110px;">統一編號</th>
+                        <th style="min-width: 70px;">國家</th>
+                        <th style="min-width: 220px;">所在地區與地址</th>
+                        <th style="min-width: 130px;">專屬業務</th>
+                        <th style="min-width: 160px;">建立時間</th>
+                        <th style="min-width: 110px; text-align: center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="customerTableBody">
+                    <!-- 由 mofei-table.js 動態渲染 -->
+                </tbody>
+            </table>
+            <!-- 分頁控制列 (固定每頁 10 筆) -->
+            <div class="pagination-bar" id="customerPagination"></div>
+        </div>
+
+        <!-- 新增/編輯 客戶彈窗 -->
+        <div class="modal-overlay" id="customerModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle" style="font-size: 1.15rem; font-weight: 700;">新增客戶</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
+                </div>
+                <form id="customerForm" onsubmit="handleFormSubmit(event)">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="search-field">
+                            <label for="formCustomerId">客戶編號 (由系統自動配置)</label>
+                            <input type="text" id="formCustomerId" class="input-control" placeholder="由系統自動配置" disabled>
+                        </div>
+                        <div class="search-field">
+                            <label for="formCustomerName">客戶姓名 *</label>
+                            <input type="text" id="formCustomerName" class="input-control" required placeholder="聯絡窗口或個人姓名">
+                        </div>
+                        <div class="search-field">
+                            <label for="formPhone">聯絡電話 * (格式: 0912-345-678)</label>
+                            <input type="text" id="formPhone" class="input-control" required pattern="^[0-9]{4}-[0-9]{3}-[0-9]{3}$" placeholder="0912-345-678">
+                        </div>
+                        <div class="search-field">
+                            <label for="formEmail">電子郵件</label>
+                            <input type="email" id="formEmail" class="input-control" placeholder="service@example.com">
+                        </div>
+                        <div class="search-field">
+                            <label for="formCompanyName">公司行號抬頭</label>
+                            <input type="text" id="formCompanyName" class="input-control" placeholder="企業客戶公司名稱">
+                        </div>
+                        <div class="search-field">
+                            <label for="formTaxId">統一編號 (格式: 8888-8888)</label>
+                            <input type="text" id="formTaxId" class="input-control" pattern="^[0-9]{4}-[0-9]{4}$|^$" placeholder="8888-8888">
+                        </div>
+                        <div class="search-field">
+                            <label for="formCountry">國家 *</label>
+                            <input type="text" id="formCountry" class="input-control" required value="台灣" placeholder="例如: 台灣">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <div class="search-field">
+                                <label for="formCity">城市 *</label>
+                                <input type="text" id="formCity" class="input-control" required placeholder="台北市">
+                            </div>
+                            <div class="search-field">
+                                <label for="formDistrict">區域 *</label>
+                                <input type="text" id="formDistrict" class="input-control" required placeholder="信義區">
+                            </div>
+                        </div>
+                        <div class="search-field">
+                            <label for="formAddress">詳細地址 *</label>
+                            <input type="text" id="formAddress" class="input-control" required placeholder="街道巷弄門牌資訊">
+                        </div>
+                        <div class="search-field">
+                            <label for="formEmployeeId">負責員工 *</label>
+                            <select id="formEmployeeId" class="select-control" required>
+                                <option value="">載入員工清單中...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="/js/mofei-table.js"></script>
+        <script>
+            let custTable;
+            let currentEditId = null;
+            let employeeList = [];
+
+            async function loadEmployeeOptions() {
+                try {
+                    const res = await fetch('/api/employee/page?current=1&size=100');
+                    const json = await res.json();
+                    if (json.code === 200 && json.data && json.data.records) {
+                        employeeList = json.data.records;
+                        renderEmployeeSelect();
+                    }
+                } catch (e) {
+                    console.error('載入員工主檔失敗', e);
+                }
+            }
+
+            function renderEmployeeSelect(selectedId = '') {
+                const select = document.getElementById('formEmployeeId');
+                select.innerHTML = '<option value="">請選擇負責員工...</option>';
+                employeeList.forEach(emp => {
+                    const opt = document.createElement('option');
+                    opt.value = emp.employeeId;
+                    opt.textContent = `${emp.employeeName} (${emp.employeeId})${emp.status === '在職' ? '' : ' [' + emp.status + ']'}`;
+                    if (emp.employeeId === selectedId) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                loadEmployeeOptions();
+
+                custTable = new MofeiTable({
+                    apiUrl: '/api/customer/page',
+                    tableBodyId: 'customerTableBody',
+                    paginationId: 'customerPagination',
+                    size: 10,
+                    columns: [
+                        { field: 'customerId', minWidth: '100px' },
+                        { field: 'customerName', minWidth: '100px' },
+                        { field: 'phone', minWidth: '130px' },
+                        { field: 'email', minWidth: '160px', render: row => row.email || '-' },
+                        { field: 'companyName', minWidth: '140px', render: row => row.companyName || '-' },
+                        { field: 'taxId', minWidth: '110px', render: row => row.taxId || '-' },
+                        { field: 'country', minWidth: '70px', render: row => row.country || '台灣' },
+                        { 
+                            field: 'address',
+                            minWidth: '220px',
+                            render: row => `${row.city}${row.district} ${row.address}`
+                        },
+                        { 
+                            field: 'employeeName',
+                            minWidth: '130px',
+                            render: row => row.employeeName ? `${row.employeeName} (${row.employeeId})` : row.employeeId
+                        },
+                        { 
+                            field: 'createdAt',
+                            minWidth: '160px',
+                            render: row => row.createdAt ? row.createdAt.replace('T', ' ').substring(0, 19) : '-' 
+                        }
+                    ],
+                    actions: (row) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.gap = '0.4rem';
+
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-secondary btn-sm';
+                        editBtn.textContent = '修改';
+                        editBtn.onclick = () => openEditModal(row);
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'btn btn-secondary btn-sm';
+                        delBtn.textContent = '刪除';
+                        delBtn.onclick = () => handleDelete(row.customerId);
+
+                        div.appendChild(editBtn);
+                        div.appendChild(delBtn);
+                        return div;
+                    }
+                });
+
+                let debounceTimer;
+                document.getElementById('searchKeyword').addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        custTable.setKeyword(e.target.value);
+                    }, 300);
+                });
+            });
+
+            function handleSearch() {
+                const customerId = document.getElementById('searchId').value.trim();
+                const customerName = document.getElementById('searchName').value.trim();
+                custTable.setFilters({ customerId, customerName });
+            }
+
+            function resetSearch() {
+                document.getElementById('searchKeyword').value = '';
+                document.getElementById('searchId').value = '';
+                document.getElementById('searchName').value = '';
+                custTable.keyword = '';
+                custTable.setFilters({});
+            }
+
+            async function openCreateModal() {
+                currentEditId = null;
+                document.getElementById('modalTitle').textContent = '新增客戶';
+                document.getElementById('customerForm').reset();
+                document.getElementById('formCustomerId').value = '';
+                document.getElementById('formCustomerId').disabled = true;
+                document.getElementById('formCustomerId').placeholder = '由系統自動配置';
+                document.getElementById('formCountry').value = '台灣';
+                if (employeeList.length === 0) {
+                    await loadEmployeeOptions();
+                } else {
+                    renderEmployeeSelect('');
+                }
+                document.getElementById('customerModal').classList.add('active');
+            }
+
+            async function openEditModal(row) {
+                currentEditId = row.customerId;
+                document.getElementById('modalTitle').textContent = `修改客戶 (${row.customerId})`;
+                document.getElementById('formCustomerId').value = row.customerId;
+                document.getElementById('formCustomerId').disabled = true;
+                document.getElementById('formCustomerId').placeholder = '';
+                document.getElementById('formCustomerName').value = row.customerName;
+                document.getElementById('formPhone').value = row.phone;
+                document.getElementById('formEmail').value = row.email || '';
+                document.getElementById('formCompanyName').value = row.companyName || '';
+                document.getElementById('formTaxId').value = row.taxId || '';
+                document.getElementById('formCountry').value = row.country || '台灣';
+                document.getElementById('formCity').value = row.city;
+                document.getElementById('formDistrict').value = row.district;
+                document.getElementById('formAddress').value = row.address;
+                if (employeeList.length === 0) {
+                    await loadEmployeeOptions();
+                }
+                renderEmployeeSelect(row.employeeId);
+                document.getElementById('customerModal').classList.add('active');
+            }
+
+            function closeModal() {
+                document.getElementById('customerModal').classList.remove('active');
+            }
+
+            function highlightErrorField(elementId) {
+                const el = document.getElementById(elementId);
+                if (el) {
+                    el.focus();
+                    if (typeof el.select === 'function') {
+                        el.select();
+                    }
+                    el.style.borderColor = '#ef4444';
+                    el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
+                    setTimeout(() => {
+                        el.style.borderColor = '';
+                        el.style.boxShadow = '';
+                    }, 3000);
+                }
+            }
+
+            async function handleFormSubmit(e) {
+                e.preventDefault();
+
+                const customerName = document.getElementById('formCustomerName').value.trim();
+                const phone = document.getElementById('formPhone').value.trim();
+                const email = document.getElementById('formEmail').value.trim();
+                const companyName = document.getElementById('formCompanyName').value.trim();
+                const taxId = document.getElementById('formTaxId').value.trim();
+                const country = document.getElementById('formCountry').value.trim();
+                const city = document.getElementById('formCity').value.trim();
+                const district = document.getElementById('formDistrict').value.trim();
+                const address = document.getElementById('formAddress').value.trim();
+                const employeeId = document.getElementById('formEmployeeId').value.trim();
+
+                // 前端防呆校驗並明確指出錯誤欄位
+                if (!customerName) {
+                    alert('輸入有誤：客戶姓名不能為空');
+                    highlightErrorField('formCustomerName');
+                    return;
+                }
+
+                if (!phone) {
+                    alert('輸入有誤：客戶電話不能為空');
+                    highlightErrorField('formPhone');
+                    return;
+                }
+
+                if (!/^[0-9]{4}-[0-9]{3}-[0-9]{3}$/.test(phone)) {
+                    alert('輸入有誤：客戶電話格式必須為 0912-345-678');
+                    highlightErrorField('formPhone');
+                    return;
+                }
+
+                if (email && !/^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) {
+                    alert('輸入有誤：電子郵件格式不正確（需包含 @ 與有效網域，例如 service@example.com）');
+                    highlightErrorField('formEmail');
+                    return;
+                }
+
+                if (taxId && !/^[0-9]{4}-[0-9]{4}$/.test(taxId)) {
+                    alert('輸入有誤：統一編號格式必須為 8888-8888');
+                    highlightErrorField('formTaxId');
+                    return;
+                }
+
+                if (!country) {
+                    alert('輸入有誤：國家不能為空');
+                    highlightErrorField('formCountry');
+                    return;
+                }
+
+                if (!city) {
+                    alert('輸入有誤：城市不能為空');
+                    highlightErrorField('formCity');
+                    return;
+                }
+
+                if (!district) {
+                    alert('輸入有誤：區域不能為空');
+                    highlightErrorField('formDistrict');
+                    return;
+                }
+
+                if (!address) {
+                    alert('輸入有誤：詳細地址不能為空');
+                    highlightErrorField('formAddress');
+                    return;
+                }
+
+                if (!employeeId) {
+                    alert('輸入有誤：請選擇負責員工');
+                    highlightErrorField('formEmployeeId');
+                    return;
+                }
+
+                const payload = {
+                    customerId: currentEditId ? document.getElementById('formCustomerId').value.trim() : null,
+                    customerName: customerName,
+                    phone: phone,
+                    email: email,
+                    companyName: companyName,
+                    taxId: taxId,
+                    country: country,
+                    city: city,
+                    district: district,
+                    address: address,
+                    employeeId: employeeId
+                };
+
+                const url = currentEditId ? `/api/customer/${currentEditId}` : '/api/customer';
+                const method = currentEditId ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await res.json();
+                    if (res.ok && result.code === 200) {
+                        alert(result.message || (currentEditId ? '修改客戶成功' : '新增客戶成功'));
+                        closeModal();
+                        custTable.loadData();
+                    } else {
+                        // 詳細告知使用者是哪一項欄位輸入有誤或重複
+                        const errMsg = result.message || (res.status === 400 ? '請求參數檢驗失敗，請檢查輸入內容' : '系統內部錯誤，請聯繫管理員');
+                        alert('操作失敗: ' + errMsg);
+
+                        // 自動定位聚焦（focus）與高亮問題欄位
+                        if (errMsg.includes('電話') || errMsg.includes('phone')) {
+                            highlightErrorField('formPhone');
+                        } else if (errMsg.includes('統一編號') || errMsg.includes('taxId')) {
+                            highlightErrorField('formTaxId');
+                        } else if (errMsg.includes('電子郵件') || errMsg.includes('email')) {
+                            highlightErrorField('formEmail');
+                        } else if (errMsg.includes('客戶編號') || errMsg.includes('customerId')) {
+                            highlightErrorField('formCustomerId');
+                        } else if (errMsg.includes('姓名') || errMsg.includes('customerName')) {
+                            highlightErrorField('formCustomerName');
+                        } else if (errMsg.includes('公司') || errMsg.includes('companyName')) {
+                            highlightErrorField('formCompanyName');
+                        } else if (errMsg.includes('國家') || errMsg.includes('country')) {
+                            highlightErrorField('formCountry');
+                        } else if (errMsg.includes('城市') || errMsg.includes('city')) {
+                            highlightErrorField('formCity');
+                        } else if (errMsg.includes('區域') || errMsg.includes('district')) {
+                            highlightErrorField('formDistrict');
+                        } else if (errMsg.includes('地址') || errMsg.includes('address')) {
+                            highlightErrorField('formAddress');
+                        } else if (errMsg.includes('員工') || errMsg.includes('employeeId')) {
+                            highlightErrorField('formEmployeeId');
+                        }
+                    }
+                } catch (err) {
+                    alert('請求異常: ' + err);
+                }
+            }
+
+            async function handleDelete(id) {
+                if (confirm(`確定要刪除客戶 [${id}] 嗎？若有關聯訂單將無法刪除。`)) {
+                    try {
+                        const res = await fetch(`/api/customer/${id}`, { method: 'DELETE' });
+                        const result = await res.json();
+                        if (result.code === 200) {
+                            alert(result.message);
+                            custTable.loadData();
+                        } else {
+                            alert('刪除失敗: ' + result.message);
+                        }
+                    } catch (e) {
+                        alert('請求異常: ' + e);
+                    }
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>

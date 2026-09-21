@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::content})}">
+<head>
+    <title>訂單主檔 - MOFEI ERP</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">訂單主檔與明細模組</h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                    管理交易訂單、明細行項目、配送地址快照與單據狀態追蹤
+                </p>
+            </div>
+            <button class="btn btn-primary" onclick="openCreateModal()">+ 新增訂單</button>
+        </div>
+
+        <!-- 搜尋與篩選列 -->
+        <div class="search-bar">
+            <div class="search-field search-field-wide">
+                <label for="searchKeyword">即時模糊搜尋</label>
+                <input type="text" id="searchKeyword" class="input-control" placeholder="搜尋訂單編號、收件人或電話...">
+            </div>
+            <div class="search-field">
+                <label for="searchId">訂單編號</label>
+                <input type="text" id="searchId" class="input-control" placeholder="例如: 20260918-0001">
+            </div>
+            <div class="search-field">
+                <label for="searchStatus">訂單狀態</label>
+                <select id="searchStatus" class="select-control">
+                    <option value="">全部狀態</option>
+                    <option value="處理中">處理中</option>
+                    <option value="待付款">待付款</option>
+                    <option value="已出貨">已出貨</option>
+                    <option value="已完成">已完成</option>
+                    <option value="已取消">已取消</option>
+                </select>
+            </div>
+            <div class="search-actions">
+                <button class="btn btn-primary" onclick="handleSearch()">查詢</button>
+                <button class="btn btn-secondary" onclick="resetSearch()">重設</button>
+            </div>
+        </div>
+
+        <!-- 資料表格 -->
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 140px;">訂單編號</th>
+                        <th style="min-width: 130px;">下單客戶</th>
+                        <th style="min-width: 130px;">業務經辦</th>
+                        <th style="min-width: 130px;">訂單總額 (NT$)</th>
+                        <th style="min-width: 170px;">收件人資訊</th>
+                        <th style="min-width: 220px;">配送地址快照</th>
+                        <th style="min-width: 100px;">訂單狀態</th>
+                        <th style="min-width: 160px;">下單時間</th>
+                        <th style="min-width: 150px; text-align: center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="orderTableBody">
+                    <!-- 由 mofei-table.js 動態渲染 -->
+                </tbody>
+            </table>
+            <!-- 分頁控制列 (固定每頁 10 筆) -->
+            <div class="pagination-bar" id="orderPagination"></div>
+        </div>
+
+        <!-- 訂單明細維護彈窗 (支援欄位修改與新增產品) -->
+        <div class="modal-overlay" id="orderDetailModal">
+            <div class="modal-content" style="max-width: 860px;">
+                <div class="modal-header">
+                    <h2 id="detailModalTitle" style="font-size: 1.15rem; font-weight: 700; white-space: nowrap;">訂單明細內容與維護</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="closeDetailModal()">✕</button>
+                </div>
+                <div style="margin-bottom: 0.75rem; font-size: 0.875rem;" id="orderInfoBanner"></div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); white-space: nowrap;">訂單明細品項</span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addEditDetailRow()">+ 新增產品</button>
+                </div>
+
+                <div style="max-height: 380px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border-medium); border-radius: 6px;">
+                    <table class="data-table" style="margin-top: 0; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 200px;">產品編號 / 品項</th>
+                                <th style="min-width: 110px;">單價 (NT$)</th>
+                                <th style="min-width: 90px;">數量</th>
+                                <th style="min-width: 100px;">折讓 (NT$)</th>
+                                <th style="min-width: 110px;">小計 (NT$)</th>
+                                <th style="min-width: 90px; text-align: center;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                    <div style="font-size: 0.95rem; color: var(--text-primary);">
+                        訂單預估總額：<strong>NT$ <span id="detailModalTotal">0</span></strong>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeDetailModal()">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="handleSaveOrderDetails()">儲存修改</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新增訂單彈窗 -->
+        <div class="modal-overlay" id="createOrderModal">
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h2 style="font-size: 1.15rem; font-weight: 700;">新增銷售訂單</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="closeCreateModal()">✕</button>
+                </div>
+                <form id="orderForm" onsubmit="handleCreateOrder(event)">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div style="display: flex; gap: 0.75rem;">
+                            <div class="search-field" style="flex: 1;">
+                                <label for="formCustomerId">下單客戶 *</label>
+                                <select id="formCustomerId" class="select-control" required onchange="handleCustomerSelectChange(this)">
+                                    <option value="">-- 請選擇客戶 --</option>
+                                </select>
+                            </div>
+                            <div class="search-field" style="flex: 1;">
+                                <label for="formEmployeeId">業務員工 *</label>
+                                <select id="formEmployeeId" class="select-control" required>
+                                    <option value="">-- 請選擇業務員工 --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <div class="search-field" style="flex: 1;">
+                                <label for="formRecipientName">收件人姓名 *</label>
+                                <input type="text" id="formRecipientName" class="input-control" required placeholder="收件人">
+                            </div>
+                            <div class="search-field" style="flex: 1;">
+                                <label for="formRecipientPhone">收件人電話 *</label>
+                                <input type="text" id="formRecipientPhone" class="input-control" required placeholder="0912-345-678">
+                            </div>
+                        </div>
+                        <div class="search-field">
+                            <label for="formRecipientAddress">完整收件地址 *</label>
+                            <input type="text" id="formRecipientAddress" class="input-control" required placeholder="配送地址全稱">
+                        </div>
+
+                        <!-- 訂單明細行項目 -->
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <label style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase;">訂單明細品項</label>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="addDetailRow()">+ 加入品項</button>
+                            </div>
+                            <!-- 明確的欄位名稱顯示 (表頭) -->
+                            <div style="display: flex; gap: 0.5rem; padding: 0.4rem 0.6rem; background: var(--bg-hover, rgba(255,255,255,0.05)); border-radius: 4px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; white-space: nowrap;">
+                                <div style="flex: 2; min-width: 180px;">產品編號 / 品項名稱 *</div>
+                                <div style="flex: 1; min-width: 80px;">數量 *</div>
+                                <div style="flex: 1; min-width: 100px;">折讓 (NT$) *</div>
+                                <div style="flex: 1; min-width: 90px; text-align: right;">小計 (NT$)</div>
+                                <div style="width: 32px; text-align: center;">操作</div>
+                            </div>
+                            <div id="detailRowsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- 動態明細行 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 0.95rem; color: var(--text-primary); white-space: nowrap;">
+                            訂單預估總額：<strong>NT$ <span id="createModalTotal">0</span></strong>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">取消</button>
+                            <button type="submit" class="btn btn-primary">送出訂單</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script src="/js/mofei-table.js"></script>
+        <script>
+            let orderTable;
+            let customerList = [];
+            let employeeList = [];
+            let productList = [];
+            let currentEditingOrder = null;
+
+            document.addEventListener('DOMContentLoaded', async () => {
+                await loadMasterOptions();
+
+                orderTable = new MofeiTable({
+                    apiUrl: '/api/order/page',
+                    tableBodyId: 'orderTableBody',
+                    paginationId: 'orderPagination',
+                    size: 10,
+                    columns: [
+                        { field: 'orderId', minWidth: '140px' },
+                        { 
+                            field: 'customerName',
+                            minWidth: '130px',
+                            render: row => row.customerName ? `${row.customerName}` : row.customerId
+                        },
+                        { 
+                            field: 'employeeName',
+                            minWidth: '130px',
+                            render: row => row.employeeName ? `${row.employeeName}` : row.employeeId
+                        },
+                        { 
+                            field: 'totalAmount',
+                            minWidth: '130px',
+                            render: row => Number(row.totalAmount).toLocaleString()
+                        },
+                        { 
+                            field: 'recipientName',
+                            minWidth: '160px',
+                            render: row => {
+                                const container = document.createElement('div');
+                                container.style.display = 'flex';
+                                container.style.flexDirection = 'column';
+                                container.style.gap = '2px';
+                                container.style.lineHeight = '1.3';
+
+                                const nameSpan = document.createElement('span');
+                                nameSpan.style.fontWeight = '500';
+                                nameSpan.style.color = 'var(--text-primary)';
+                                nameSpan.textContent = row.recipientName || '-';
+
+                                container.appendChild(nameSpan);
+
+                                if (row.recipientPhone) {
+                                    const phoneSpan = document.createElement('span');
+                                    phoneSpan.style.fontSize = '0.85rem';
+                                    phoneSpan.style.color = 'var(--text-secondary)';
+                                    phoneSpan.textContent = row.recipientPhone;
+                                    container.appendChild(phoneSpan);
+                                }
+                                return container;
+                            }
+                        },
+                        { 
+                            field: 'recipientAddress', 
+                            minWidth: '220px',
+                            render: row => {
+                                const div = document.createElement('div');
+                                div.style.lineHeight = '1.4';
+                                div.style.wordBreak = 'break-word';
+
+                                const addr = row.recipientAddress || '';
+                                if (!addr) {
+                                    div.textContent = '-';
+                                    return div;
+                                }
+
+                                // 支援換行符號、空格或依台灣常見地址規則於道路單位 (路/街/大道/段) 智慧分行
+                                let lines = [];
+                                if (addr.includes('\n')) {
+                                    lines = addr.split('\n');
+                                } else if (addr.includes(' ') || addr.includes('　')) {
+                                    lines = addr.split(/[\s　]+/);
+                                } else if (addr.length >= 10) {
+                                    const match = addr.match(/^(.{7,15}?(?:大道|[路街段]))(.+)$/);
+                                    if (match) {
+                                        lines = [match[1], match[2]];
+                                    } else {
+                                        lines = [addr];
+                                    }
+                                } else {
+                                    lines = [addr];
+                                }
+
+                                lines.forEach((line, idx) => {
+                                    if (idx > 0) {
+                                        div.appendChild(document.createElement('br'));
+                                    }
+                                    div.appendChild(document.createTextNode(line));
+                                });
+
+                                return div;
+                            }
+                        },
+                        { 
+                            field: 'status',
+                            minWidth: '100px',
+                            render: row => {
+                                const span = document.createElement('span');
+                                span.className = 'badge';
+                                span.textContent = row.status;
+                                return span;
+                            } 
+                        },
+                        { 
+                            field: 'createdAt',
+                            minWidth: '160px',
+                            render: row => row.createdAt ? row.createdAt.replace('T', ' ').substring(0, 19) : '-' 
+                        }
+                    ],
+                    actions: (row) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.gap = '0.4rem';
+
+                        const detailBtn = document.createElement('button');
+                        detailBtn.className = 'btn btn-secondary btn-sm';
+                        detailBtn.textContent = '明細';
+                        detailBtn.onclick = () => openDetailModal(row);
+
+                        const statusBtn = document.createElement('button');
+                        statusBtn.className = 'btn btn-secondary btn-sm';
+                        statusBtn.textContent = '狀態';
+                        statusBtn.onclick = () => promptUpdateStatus(row.orderId, row.status);
+
+                        div.appendChild(detailBtn);
+                        div.appendChild(statusBtn);
+                        return div;
+                    }
+                });
+
+                let debounceTimer;
+                document.getElementById('searchKeyword').addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        orderTable.setKeyword(e.target.value);
+                    }, 300);
+                });
+            });
+
+            async function loadMasterOptions() {
+                try {
+                    const [cRes, eRes, pRes] = await Promise.all([
+                        fetch('/api/customer/page?size=100').then(r => r.json()),
+                        fetch('/api/employee/page?size=100').then(r => r.json()),
+                        fetch('/api/product/page?size=100').then(r => r.json())
+                    ]);
+                    if (cRes.code === 200 && cRes.data) {
+                        customerList = cRes.data.records || [];
+                        populateCustomerSelect('formCustomerId', customerList);
+                    }
+                    if (eRes.code === 200 && eRes.data) {
+                        employeeList = eRes.data.records || [];
+                        populateEmployeeSelect('formEmployeeId', employeeList);
+                    }
+                    if (pRes.code === 200 && pRes.data) {
+                        productList = pRes.data.records || [];
+                    }
+                } catch (e) {
+                    console.error('載入主檔選項失敗:', e);
+                }
+            }
+
+            function populateCustomerSelect(selectId, list, selectedVal = '') {
+                const el = document.getElementById(selectId);
+                if (!el) return;
+                el.innerHTML = '<option value="">-- 請選擇客戶 --</option>';
+                list.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.customerId;
+                    opt.textContent = `${c.customerId} - ${c.customerName}`;
+                    if (selectedVal && selectedVal === c.customerId) opt.selected = true;
+                    el.appendChild(opt);
+                });
+            }
+
+            function populateEmployeeSelect(selectId, list, selectedVal = '') {
+                const el = document.getElementById(selectId);
+                if (!el) return;
+                el.innerHTML = '<option value="">-- 請選擇業務員工 --</option>';
+                list.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e.employeeId;
+                    opt.textContent = `${e.employeeId} - ${e.employeeName}`;
+                    if (selectedVal && selectedVal === e.employeeId) opt.selected = true;
+                    el.appendChild(opt);
+                });
+            }
+
+            function handleSearch() {
+                const orderId = document.getElementById('searchId').value.trim();
+                const status = document.getElementById('searchStatus').value;
+                orderTable.setFilters({ orderId, status });
+            }
+
+            function resetSearch() {
+                document.getElementById('searchKeyword').value = '';
+                document.getElementById('searchId').value = '';
+                document.getElementById('searchStatus').value = '';
+                orderTable.keyword = '';
+                orderTable.setFilters({});
+            }
+
+            // ===== 訂單明細維護彈窗 =====
+            function openDetailModal(row) {
+                currentEditingOrder = JSON.parse(JSON.stringify(row));
+                document.getElementById('detailModalTitle').textContent = `訂單明細內容與維護 [${row.orderId}]`;
+                document.getElementById('orderInfoBanner').innerHTML = `
+                    客戶: <strong>${row.customerName || row.customerId}</strong> | 
+                    經辦業務: <strong>${row.employeeName || row.employeeId}</strong> | 
+                    收件人: <strong>${row.recipientName}</strong> (${row.recipientPhone}) | 
+                    狀態: <span class="badge">${row.status}</span>
+                `;
+
+                const tbody = document.getElementById('detailTableBody');
+                tbody.innerHTML = '';
+
+                if (row.details && row.details.length > 0) {
+                    row.details.forEach(d => addEditDetailRow(d));
+                } else {
+                    addEditDetailRow();
+                }
+
+                recalcModalTotal();
+                document.getElementById('orderDetailModal').classList.add('active');
+            }
+
+            function closeDetailModal() {
+                document.getElementById('orderDetailModal').classList.remove('active');
+                currentEditingOrder = null;
+            }
+
+            function addEditDetailRow(item = null) {
+                const tbody = document.getElementById('detailTableBody');
+                const tr = document.createElement('tr');
+                tr.className = 'edit-detail-row';
+
+                const defaultProd = (productList && productList.length > 0) ? productList[0] : null;
+                const productId = item ? item.productId : (defaultProd ? defaultProd.productId : '');
+                const unitPrice = item ? item.unitPrice : (defaultProd ? defaultProd.price : 0);
+                const quantity = item ? item.quantity : 1;
+                const discountAmount = item ? Number(item.discountAmount) : 0;
+                const subtotal = item ? item.subtotal : Math.max(0, (unitPrice * quantity) - discountAmount);
+
+                let prodOptionsHtml = '<option value="">-- 請選擇產品 --</option>';
+                let found = false;
+                if (productList && productList.length > 0) {
+                    productList.forEach(p => {
+                        const isSel = (productId && p.productId === productId);
+                        if (isSel) found = true;
+                        prodOptionsHtml += `<option value="${p.productId}" data-price="${p.price}" ${isSel ? 'selected' : ''}>${p.productId} - ${p.productName}</option>`;
+                    });
+                }
+                if (productId && !found) {
+                    const snapName = (item && item.productNameSnapshot) ? item.productNameSnapshot : productId;
+                    prodOptionsHtml += `<option value="${productId}" data-price="${unitPrice}" selected>${productId} - ${snapName}</option>`;
+                }
+
+                tr.innerHTML = `
+                    <td>
+                        <select class="select-control edit-prod-id" onchange="onEditProductChange(this)" required>
+                            ${prodOptionsHtml}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" class="input-control edit-unit-price" value="${unitPrice}" readonly style="background: rgba(255,255,255,0.05); text-align: right;">
+                    </td>
+                    <td>
+                        <input type="number" class="input-control edit-qty" min="1" value="${quantity}" oninput="recalcModalTotal()" required style="text-align: right;">
+                    </td>
+                    <td>
+                        <select class="select-control edit-discount" onchange="recalcModalTotal()">
+                            <option value="0" ${discountAmount === 0 ? 'selected' : ''}>0</option>
+                            <option value="5" ${discountAmount === 5 ? 'selected' : ''}>5</option>
+                            <option value="75" ${discountAmount === 75 ? 'selected' : ''}>75</option>
+                        </select>
+                    </td>
+                    <td style="text-align: right;">
+                        <strong class="edit-subtotal">${Number(subtotal).toLocaleString()}</strong>
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="removeEditDetailRow(this)" title="刪除品項">✕</button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+                recalcModalTotal();
+            }
+
+            function onEditProductChange(selectEl) {
+                const row = selectEl.closest('tr');
+                const selectedOpt = selectEl.options[selectEl.selectedIndex];
+                const price = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) || 0 : 0;
+                const priceInput = row.querySelector('.edit-unit-price');
+                if (priceInput) priceInput.value = price;
+                recalcModalTotal();
+            }
+
+            function removeEditDetailRow(btn) {
+                const tbody = document.getElementById('detailTableBody');
+                if (tbody.querySelectorAll('tr.edit-detail-row').length <= 1) {
+                    alert('訂單至少需保留一筆明細品項！');
+                    return;
+                }
+                btn.closest('tr').remove();
+                recalcModalTotal();
+            }
+
+            function recalcModalTotal() {
+                const rows = document.querySelectorAll('#detailTableBody tr.edit-detail-row');
+                let total = 0;
+                rows.forEach(row => {
+                    const unitPrice = parseFloat(row.querySelector('.edit-unit-price').value) || 0;
+                    const qty = parseInt(row.querySelector('.edit-qty').value, 10) || 1;
+                    const discount = parseFloat(row.querySelector('.edit-discount').value) || 0;
+                    const subtotal = Math.max(0, (unitPrice * qty) - discount);
+                    const subtotalEl = row.querySelector('.edit-subtotal');
+                    if (subtotalEl) subtotalEl.textContent = Number(subtotal).toLocaleString();
+                    total += subtotal;
+                });
+                const totalEl = document.getElementById('detailModalTotal');
+                if (totalEl) totalEl.textContent = Number(total).toLocaleString();
+            }
+
+            async function handleSaveOrderDetails() {
+                if (!currentEditingOrder) return;
+                const rows = document.querySelectorAll('#detailTableBody tr.edit-detail-row');
+                if (rows.length === 0) {
+                    alert('請至少保留一筆訂單明細！');
+                    return;
+                }
+
+                const details = [];
+                for (const row of rows) {
+                    const prodSelect = row.querySelector('.edit-prod-id');
+                    const productId = prodSelect ? prodSelect.value.trim() : '';
+                    const unitPrice = parseFloat(row.querySelector('.edit-unit-price').value) || 0;
+                    const quantity = parseInt(row.querySelector('.edit-qty').value, 10);
+                    const discountAmount = parseFloat(row.querySelector('.edit-discount').value) || 0;
+
+                    if (!productId) {
+                        alert('請選擇產品品項！');
+                        return;
+                    }
+                    if (!quantity || quantity < 1) {
+                        alert('購買數量必須大於 0！');
+                        return;
+                    }
+
+                    details.push({
+                        productId,
+                        unitPrice,
+                        quantity,
+                        discountAmount
+                    });
+                }
+
+                const payload = {
+                    orderId: currentEditingOrder.orderId,
+                    customerId: currentEditingOrder.customerId,
+                    employeeId: currentEditingOrder.employeeId,
+                    recipientName: currentEditingOrder.recipientName,
+                    recipientPhone: currentEditingOrder.recipientPhone,
+                    recipientAddress: currentEditingOrder.recipientAddress,
+                    status: currentEditingOrder.status,
+                    details: details
+                };
+
+                try {
+                    const res = await fetch(`/api/order/${currentEditingOrder.orderId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await res.json();
+                    if (result.code === 200) {
+                        alert('訂單明細修改成功！');
+                        closeDetailModal();
+                        orderTable.loadData();
+                    } else {
+                        alert('修改失敗: ' + result.message);
+                    }
+                } catch (e) {
+                    alert('請求異常: ' + e);
+                }
+            }
+
+            // ===== 新增訂單彈窗 =====
+            function openCreateModal() {
+                document.getElementById('orderForm').reset();
+                populateCustomerSelect('formCustomerId', customerList);
+                populateEmployeeSelect('formEmployeeId', employeeList);
+                document.getElementById('detailRowsContainer').innerHTML = '';
+                const defaultProdId = (productList && productList.length > 0) ? productList[0].productId : '202601A';
+                addDetailRow(defaultProdId, 1, 0); // 預設帶出一行
+                recalcCreateModalTotal();
+                document.getElementById('createOrderModal').classList.add('active');
+            }
+
+            function closeCreateModal() {
+                document.getElementById('createOrderModal').classList.remove('active');
+            }
+
+            function handleCustomerSelectChange(selectEl) {
+                const custId = selectEl.value;
+                if (!custId) return;
+                const customer = customerList.find(c => c.customerId === custId);
+                if (customer) {
+                    if (customer.customerName) {
+                        document.getElementById('formRecipientName').value = customer.customerName;
+                    }
+                    if (customer.phone) {
+                        document.getElementById('formRecipientPhone').value = customer.phone;
+                    }
+                    const fullAddr = [customer.country, customer.city, customer.district, customer.address].filter(Boolean).join(' ');
+                    if (fullAddr) {
+                        document.getElementById('formRecipientAddress').value = fullAddr;
+                    } else if (customer.address) {
+                        document.getElementById('formRecipientAddress').value = customer.address;
+                    }
+                    if (customer.employeeId) {
+                        const empSelect = document.getElementById('formEmployeeId');
+                        if (empSelect) {
+                            empSelect.value = customer.employeeId;
+                        }
+                    }
+                }
+            }
+
+            function addDetailRow(prodId = '', qty = 1, discount = 0) {
+                const container = document.getElementById('detailRowsContainer');
+                const row = document.createElement('div');
+                row.className = 'detail-input-row';
+                row.style.display = 'flex';
+                row.style.gap = '0.5rem';
+                row.style.alignItems = 'center';
+
+                let prodOptionsHtml = '<option value="">-- 請選擇產品 --</option>';
+                let found = false;
+                if (productList && productList.length > 0) {
+                    productList.forEach(p => {
+                        const isSel = (prodId && (p.productId === prodId || p.productName === prodId));
+                        if (isSel) found = true;
+                        prodOptionsHtml += `<option value="${p.productId}" data-price="${p.price}" ${isSel ? 'selected' : ''}>${p.productId} - ${p.productName} (NT$ ${Number(p.price).toLocaleString()})</option>`;
+                    });
+                }
+                if (prodId && !found) {
+                    prodOptionsHtml += `<option value="${prodId}" data-price="0" selected>${prodId}</option>`;
+                }
+
+                row.innerHTML = `
+                    <select class="select-control detail-prod-id" onchange="recalcCreateModalTotal()" required style="flex:2;">
+                        ${prodOptionsHtml}
+                    </select>
+                    <input type="number" class="input-control detail-qty" min="1" placeholder="數量" required value="${qty}" oninput="recalcCreateModalTotal()" style="flex:1; text-align: right;">
+                    <select class="select-control detail-discount" onchange="recalcCreateModalTotal()" style="flex:1;">
+                        <option value="0" ${Number(discount) === 0 ? 'selected' : ''}>0</option>
+                        <option value="5" ${Number(discount) === 5 ? 'selected' : ''}>5</option>
+                        <option value="75" ${Number(discount) === 75 ? 'selected' : ''}>75</option>
+                    </select>
+                    <span class="detail-subtotal" style="flex:1; text-align:right; font-weight:600; font-size: 0.9rem;">NT$ 0</span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="removeCreateDetailRow(this)" style="width: 32px;" title="刪除品項">✕</button>
+                `;
+                container.appendChild(row);
+                recalcCreateModalTotal();
+            }
+
+            function removeCreateDetailRow(btn) {
+                const container = document.getElementById('detailRowsContainer');
+                if (container.querySelectorAll('.detail-input-row').length <= 1) {
+                    alert('訂單至少需加入一筆明細品項！');
+                    return;
+                }
+                btn.parentElement.remove();
+                recalcCreateModalTotal();
+            }
+
+            function recalcCreateModalTotal() {
+                const rows = document.querySelectorAll('#detailRowsContainer .detail-input-row');
+                let total = 0;
+                rows.forEach(row => {
+                    const prodSelect = row.querySelector('.detail-prod-id');
+                    const selectedOpt = (prodSelect && prodSelect.selectedIndex >= 0) ? prodSelect.options[prodSelect.selectedIndex] : null;
+                    const unitPrice = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) || 0 : 0;
+                    const qty = parseInt(row.querySelector('.detail-qty').value, 10) || 1;
+                    const discount = parseFloat(row.querySelector('.detail-discount').value) || 0;
+                    const subtotal = Math.max(0, (unitPrice * qty) - discount);
+                    const subtotalEl = row.querySelector('.detail-subtotal');
+                    if (subtotalEl) subtotalEl.textContent = `NT$ ${Number(subtotal).toLocaleString()}`;
+                    total += subtotal;
+                });
+                const totalEl = document.getElementById('createModalTotal');
+                if (totalEl) totalEl.textContent = Number(total).toLocaleString();
+            }
+
+            async function handleCreateOrder(e) {
+                e.preventDefault();
+                const detailRows = document.querySelectorAll('.detail-input-row');
+                if (detailRows.length === 0) {
+                    alert('請至少加入一筆訂單明細！');
+                    return;
+                }
+
+                const details = [];
+                for (const row of detailRows) {
+                    const prodSelect = row.querySelector('.detail-prod-id');
+                    const productId = prodSelect.value.trim();
+                    const selectedOpt = prodSelect.options[prodSelect.selectedIndex];
+                    const unitPrice = selectedOpt ? parseFloat(selectedOpt.getAttribute('data-price')) || 0 : 0;
+                    const quantity = parseInt(row.querySelector('.detail-qty').value, 10);
+                    const discountAmount = parseFloat(row.querySelector('.detail-discount').value) || 0;
+                    if (!productId) {
+                        alert('產品編號不能為空');
+                        return;
+                    }
+                    details.push({ productId, unitPrice, quantity, discountAmount });
+                }
+
+                const payload = {
+                    customerId: document.getElementById('formCustomerId').value.trim(),
+                    employeeId: document.getElementById('formEmployeeId').value.trim(),
+                    recipientName: document.getElementById('formRecipientName').value.trim(),
+                    recipientPhone: document.getElementById('formRecipientPhone').value.trim(),
+                    recipientAddress: document.getElementById('formRecipientAddress').value.trim(),
+                    status: '處理中',
+                    details
+                };
+
+                try {
+                    const res = await fetch('/api/order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await res.json();
+                    if (result.code === 200) {
+                        alert(result.message);
+                        closeCreateModal();
+                        orderTable.loadData();
+                    } else {
+                        alert('建立訂單失敗: ' + result.message);
+                    }
+                } catch (err) {
+                    alert('請求異常: ' + err);
+                }
+            }
+
+            async function promptUpdateStatus(orderId, currentStatus) {
+                const newStatus = prompt(`請輸入新的訂單狀態 (待付款、處理中、已出貨、已完成、已取消)：`, currentStatus);
+                if (newStatus && newStatus !== currentStatus) {
+                    try {
+                        const res = await fetch(`/api/order/${orderId}/status?status=${encodeURIComponent(newStatus)}`, {
+                            method: 'PUT'
+                        });
+                        const result = await res.json();
+                        if (result.code === 200) {
+                            alert(result.message);
+                            orderTable.loadData();
+                        } else {
+                            alert('更新失敗: ' + result.message);
+                        }
+                    } catch (e) {
+                        alert('請求異常: ' + e);
+                    }
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(title, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:replace="${title}">MOFEI ERP 系統網站</title>
+    <link rel="stylesheet" th:href="@{/css/mofei-style.css}">
+</head>
+<body>
+    <!-- 頂端導覽列 -->
+    <header class="navbar">
+        <a href="/dashboard" class="navbar-brand">
+            <img th:src="@{/logo/2026-09-10-00-logo by MF.jpg}" alt="MOFEI Logo" class="navbar-logo">
+            <span class="navbar-title">MOFEI ERP</span>
+        </a>
+
+        <!-- 即時動態時間 (YYYY-MM-DD HH:mm:ss) -->
+        <div id="liveClock" class="navbar-clock">2026-09-20 00:00:00</div>
+
+        <!-- 模組導航選單 -->
+        <nav>
+            <ul class="navbar-menu">
+                <li><a href="/dashboard" class="nav-link" id="nav-dashboard">儀表板</a></li>
+                <li><a href="/employee" class="nav-link" id="nav-employee">員工主檔</a></li>
+                <li><a href="/product" class="nav-link" id="nav-product">產品主檔</a></li>
+                <li><a href="/customer" class="nav-link" id="nav-customer">客戶主檔</a></li>
+                <li><a href="/order" class="nav-link" id="nav-order">訂單主檔</a></li>
+            </ul>
+        </nav>
+
+        <!-- 使用者資訊與登入/登出 -->
+        <div class="navbar-user" id="navbarUserArea">
+            <span id="userGreeting" style="font-size: 0.85rem; font-weight: 600; white-space: nowrap;">訪客模式</span>
+            <button id="authBtn" class="btn btn-secondary btn-sm" onclick="handleAuthAction()">登入</button>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="main-container">
+        <div th:replace="${content}">
+            <p>主要內容載入中...</p>
+        </div>
+    </main>
+
+    <!-- 頁尾宣告 -->
+    <footer class="footer">
+        <p style="white-space: nowrap;">@2026 DataBase by MOFEI</p>
+    </footer>
+
+    <!-- 純原生 JavaScript: 動態時鐘與使用者狀態處理 -->
+    <script>
+        // 1. 動態即時時鐘 (每秒更新 YYYY-MM-DD HH:mm:ss)
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            const clockEl = document.getElementById('liveClock');
+            if (clockEl) {
+                clockEl.textContent = formattedTime;
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 2. 登入狀態檢查與導航選單高亮
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 高亮當前頁面導航
+            const path = window.location.pathname;
+            const navMap = {
+                '/dashboard': 'nav-dashboard',
+                '/': 'nav-dashboard',
+                '/employee': 'nav-employee',
+                '/product': 'nav-product',
+                '/customer': 'nav-customer',
+                '/order': 'nav-order'
+            };
+            if (navMap[path]) {
+                const activeNav = document.getElementById(navMap[path]);
+                if (activeNav) activeNav.classList.add('active');
+            }
+
+            // 檢查是否已登入
+            try {
+                const res = await fetch('/api/auth/me');
+                const result = await res.json();
+                if (result.code === 200 && result.data) {
+                    const user = result.data;
+                    document.getElementById('userGreeting').textContent = `${user.employeeName} (${user.role})`;
+                    const authBtn = document.getElementById('authBtn');
+                    authBtn.textContent = '登出';
+                    authBtn.setAttribute('data-action', 'logout');
+                } else {
+                    document.getElementById('userGreeting').textContent = '訪客模式 (未登入)';
+                    const authBtn = document.getElementById('authBtn');
+                    authBtn.textContent = '登入';
+                    authBtn.setAttribute('data-action', 'login');
+                }
+            } catch (err) {
+                console.warn('檢查登入狀態失敗:', err);
+            }
+        });
+
+        // 3. 處理登入/登出動作
+        async function handleAuthAction() {
+            const authBtn = document.getElementById('authBtn');
+            const action = authBtn.getAttribute('data-action') || 'login';
+            if (action === 'logout') {
+                if (confirm('確定要登出系統嗎？')) {
+                    try {
+                        const res = await fetch('/api/auth/logout', { method: 'POST' });
+                        if (res.ok) {
+                            window.location.href = '/login';
+                        }
+                    } catch (e) {
+                        alert('登出失敗');
+                    }
+                }
+            } else {
+                window.location.href = '/login';
+            }
+        }
+    </script>
+</body>
+</html>
